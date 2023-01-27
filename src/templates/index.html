@@ -1,0 +1,14 @@
+<p id="learn_output"></p>
+
+<script>
+    var target_output = document.getElementById("learn_output");
+    var learn_update = new EventSource("/data");
+
+    learn_update.onmessage = function (e) {
+        if (e.data == "close") {
+            learn_update.close();
+        } else {
+            target_output.innerHTML = "Status: " + e.data;
+        }
+    };
+</script>
