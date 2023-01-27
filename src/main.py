@@ -17,17 +17,45 @@ memory = {
 
 
 def add_neighbour(neighbour_id, json_data):
+    """
+    Add a neighour to current list if not present
+
+    parameters:
+        neigbour_id: key received from remote host
+        json_data: value received from remote host
+
+    return:
+        None
+    """
     if neighbour_id not in memory['neighbours']:
         memory['neighbours'][neighbour_id] = {"host": json_data['host'], "port": json_data['port']}
 
 
 @app.route('/', methods=['GET'])
 def index():
+    """
+    Serve index.html
+
+    return:
+        rendered index.html
+    """
     return render_template('index.html')
 
 
 @app.route('/data', methods=['GET', 'POST'])
 def data():
+    """
+    Handle data input and requests. Data is passed by calling POST
+    with a json body of the total remote host memory.
+
+    If the current leader is unknown, elect self and publish.
+
+    args:
+        request.json
+
+    return:
+        On GET return an event-stream of the local host memory
+    """
     global memory
     def update():
         with app.app_context():
@@ -48,6 +76,15 @@ def data():
         return Response(update(), mimetype='text/event-stream')
 
 def search(port, host="127.0.0.1"):
+    """
+    Post to a remote host current memory. If the remote host has a leader
+    already set, set this remote leader as local leader.
+
+
+    return:
+        True: if request succeeded
+        False: if request failed
+    """
     try:
         resp = requests.post('http://' + host + ':' + port + '/data', json=memory)
         if resp.json()['leader'] != 'unknown':
@@ -63,6 +100,13 @@ def search(port, host="127.0.0.1"):
     return True
 
 def leader_elect():
+    """
+    Hold a leader election by looking at the hosts one port
+    above self, and one port below. First setting self as leader,
+    correcting to the remote leader if one is returned.
+
+    return: None
+    """
     memory['leader'] = memory['id']
     
     search(str(int(sys.argv[1])+1))
@@ -70,6 +114,10 @@ def leader_elect():
     print(f"election: {memory['leader']}")
 
 class Updates(Thread):
+    """
+    Thread to periodically check with the remote neighbours if
+    a change has occured
+    """
    
     StopEvent = 0
       

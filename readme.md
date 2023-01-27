@@ -6,4 +6,5 @@ Attempting to write a distributed system that elects a leader, keeps track of wh
 TODO:
 - [ ] Add alive checks
 - [ ] Propagate changes across hosts with interaction (currently required to interact with middle host)
+- [ ] Catch exit flask thread. Current main catch event is not hit.
 - [ ] Other bits :)
