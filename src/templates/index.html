@@ -1,4 +1,4 @@
-<p id="learn_output"></p>
+<pre><p id="learn_output"></p></pre>
 
 <script>
     var target_output = document.getElementById("learn_output");
@@ -8,7 +8,9 @@
         if (e.data == "close") {
             learn_update.close();
         } else {
-            target_output.innerHTML = "Status: " + e.data;
+            let json = JSON.stringify(JSON.parse(e.data), null, 2);
+            target_output.innerHTML = json
+            sessionStorage.setItem("data", json);
         }
     };
 </script>

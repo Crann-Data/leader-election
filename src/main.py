@@ -4,6 +4,8 @@ import time
 import sys
 import requests
 from threading import Thread, Event
+import json
+import hashlib
 
 app = Flask(__name__)
 
@@ -11,6 +13,7 @@ memory = {
     "id" : "",
     "leader": "unknown",
     "neighbours": {},
+    "hashed_neighbours": {},
     "host": "127.0.0.1",
     "port": ""
     }
@@ -18,7 +21,8 @@ memory = {
 
 def add_neighbour(neighbour_id, json_data):
     """
-    Add a neighour to current list if not present
+    Add a neighour to current list if not present. Add a hash host and port map to the 
+    neighbour ID.
 
     parameters:
         neigbour_id: key received from remote host
@@ -29,7 +33,7 @@ def add_neighbour(neighbour_id, json_data):
     """
     if neighbour_id not in memory['neighbours']:
         memory['neighbours'][neighbour_id] = {"host": json_data['host'], "port": json_data['port']}
-
+        memory['hashed_neighbours'][hashlib.md5(json.dumps(memory['neighbours'][neighbour_id]).encode('utf-8')).hexdigest()] = neighbour_id
 
 @app.route('/', methods=['GET'])
 def index():
@@ -62,7 +66,7 @@ def data():
             while True:
                 # Perform update
                 time.sleep(0.1)
-                yield f'data: {memory}\n\n'
+                yield f'data: {json.dumps(memory)}\n\n'
 
     if request.method == 'POST':
         json_data = request.json
@@ -132,9 +136,10 @@ class Updates(Thread):
         while True:
             time.sleep(0.5)
             local_neighbours = memory['neighbours'].copy()
-            for host_id in local_neighbours:
-                if not search(memory['neighbours'][host_id]['port'], memory['neighbours'][host_id]['host']):
-                    del memory['neighbours'][host_id]
+            for neighbour_id in local_neighbours:
+                if not search(memory['neighbours'][neighbour_id]['port'], memory['neighbours'][neighbour_id]['host']):
+                    del memory['hashed_neighbours'][hashlib.md5(json.dumps(memory['neighbours'][neighbour_id]).encode ('utf-8')).hexdigest()]
+                    del memory['neighbours'][neighbour_id]
 
 if __name__ == "__main__":
     Stop = Event()
