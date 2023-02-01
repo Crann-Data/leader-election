@@ -73,11 +73,26 @@ def data():
         if memory['leader'] == 'unknown':
             memory['leader'] = json_data['leader']
         add_neighbour(json_data['id'], json_data)
+        if str(int(sys.argv[1])+1) != json_data['port']:
+            search(str(int(sys.argv[1])+1))
+        if str(int(sys.argv[1])-1) != json_data['port']:
+            search(str(int(sys.argv[1])-1))
         return jsonify(memory)
     else:
         if memory['leader'] == 'unknown':
             leader_elect()
         return Response(update(), mimetype='text/event-stream')
+
+def call(port, host="127.0.0.1"):
+    try:
+        resp = requests.post('http://' + host + ':' + port + '/data', json=memory)
+        json_data = resp.json()
+    except Exception as e:
+        print(f"call {host}:{port}: Error {e}")
+        return False
+    return json_data
+
+
 
 def search(port, host="127.0.0.1"):
     """
@@ -90,16 +105,17 @@ def search(port, host="127.0.0.1"):
         False: if request failed
     """
     try:
-        resp = requests.post('http://' + host + ':' + port + '/data', json=memory)
-        if resp.json()['leader'] != 'unknown':
-            json_data = resp.json()
-            memory['leader'] = json_data['leader']
-            add_neighbour(json_data['id'], json_data)
-            for neighbour_id in json_data['neighbours']:
-                if neighbour_id != memory['id']:
-                    add_neighbour(neighbour_id, json_data['neighbours'][neighbour_id])
+        json_data = call(port=port, host=host)
+        if json_data:
+            if json_data['leader'] != 'unknown':
+                memory['leader'] = json_data['leader']
+                add_neighbour(json_data['id'], json_data)
+                for neighbour_id in json_data['neighbours']:
+                    if neighbour_id != memory['id']:
+                        # if call(json_data['neighbours'][neighbour_id]['port'],json_data['neighbours'][neighbour_id]['host']):
+                        add_neighbour(neighbour_id, json_data['neighbours'][neighbour_id])
     except Exception as e:
-        print(f"host {host}:{port}: Error {e}")
+        print(f"search {host}:{port}: Error {e}")
         return False
     return True
 
@@ -134,10 +150,10 @@ class Updates(Thread):
     def run(self):
         global memory
         while True:
-            time.sleep(0.5)
+            time.sleep(5)
             local_neighbours = memory['neighbours'].copy()
             for neighbour_id in local_neighbours:
-                if not search(memory['neighbours'][neighbour_id]['port'], memory['neighbours'][neighbour_id]['host']):
+                if not call(memory['neighbours'][neighbour_id]['port'], memory['neighbours'][neighbour_id]['host']):
                     del memory['hashed_neighbours'][hashlib.md5(json.dumps(memory['neighbours'][neighbour_id]).encode ('utf-8')).hexdigest()]
                     del memory['neighbours'][neighbour_id]
 
