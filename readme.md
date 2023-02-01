@@ -10,3 +10,4 @@ TODO:
 - [ ] Catch exit flask thread. Current main catch event is not hit.
 - [ ] Other bits :)
 - [x] MD5 hash host and port to map - checking if host already exists. Warning: Collisions possible in MD5 hashing
+- [ ] Does not remove neighbour when host is brought down. I think this is because it's updating it's neighbours list from other hosts.
