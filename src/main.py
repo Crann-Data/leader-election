@@ -11,7 +11,6 @@ app = Flask(__name__)
 
 memory = {
     "id" : "",
-    "leader": "unknown",
     "neighbours": {},
     "hashed_neighbours": {},
     "host": "127.0.0.1",
@@ -31,10 +30,12 @@ def add_neighbour(neighbour_id, json_data):
     return:
         None
     """
-    if neighbour_id not in memory['neighbours']:
+    if neighbour_id not in memory['neighbours'] and neighbour_id != memory['id']:
+        if hashlib.md5(json.dumps({"host": json_data['host'], "port": json_data['port']}).encode('utf-8')).hexdigest() in memory['hashed_neighbours']:
+            del memory['neighbours'][memory['hashed_neighbours'][hashlib.md5(json.dumps({"host": json_data['host'], "port": json_data['port']}).encode('utf-8')).hexdigest()]]
+        
         memory['neighbours'][neighbour_id] = {"host": json_data['host'], "port": json_data['port']}
         memory['hashed_neighbours'][hashlib.md5(json.dumps(memory['neighbours'][neighbour_id]).encode('utf-8')).hexdigest()] = neighbour_id
-
 @app.route('/', methods=['GET'])
 def index():
     """
@@ -70,20 +71,13 @@ def data():
 
     if request.method == 'POST':
         json_data = request.json
-        if memory['leader'] == 'unknown':
-            memory['leader'] = json_data['leader']
         add_neighbour(json_data['id'], json_data)
-        if str(int(sys.argv[1])+1) != json_data['port']:
-            search(str(int(sys.argv[1])+1))
-        if str(int(sys.argv[1])-1) != json_data['port']:
-            search(str(int(sys.argv[1])-1))
         return jsonify(memory)
     else:
-        if memory['leader'] == 'unknown':
-            leader_elect()
         return Response(update(), mimetype='text/event-stream')
 
 def call(port, host="127.0.0.1"):
+    port = str(port)
     try:
         resp = requests.post('http://' + host + ':' + port + '/data', json=memory)
         json_data = resp.json()
@@ -94,7 +88,7 @@ def call(port, host="127.0.0.1"):
 
 
 
-def search(port, host="127.0.0.1"):
+def search(port, host="127.0.0.1", search_distance=1):
     """
     Post to a remote host current memory. If the remote host has a leader
     already set, set this remote leader as local leader.
@@ -104,34 +98,21 @@ def search(port, host="127.0.0.1"):
         True: if request succeeded
         False: if request failed
     """
-    try:
-        json_data = call(port=port, host=host)
-        if json_data:
-            if json_data['leader'] != 'unknown':
-                memory['leader'] = json_data['leader']
-                add_neighbour(json_data['id'], json_data)
+    def action(port, host, offset):
+        try:
+            json_data = call(port+offset, host=host)
+            if json_data:
+                if json_data['id'] not in memory['neighbours']:
+                    add_neighbour(json_data['id'], json_data)
                 for neighbour_id in json_data['neighbours']:
                     if neighbour_id != memory['id']:
-                        # if call(json_data['neighbours'][neighbour_id]['port'],json_data['neighbours'][neighbour_id]['host']):
                         add_neighbour(neighbour_id, json_data['neighbours'][neighbour_id])
-    except Exception as e:
-        print(f"search {host}:{port}: Error {e}")
-        return False
-    return True
+        except Exception as e:
+            print(f"search {host}:{port}: Error {e}")
 
-def leader_elect():
-    """
-    Hold a leader election by looking at the hosts one port
-    above self, and one port below. First setting self as leader,
-    correcting to the remote leader if one is returned.
-
-    return: None
-    """
-    memory['leader'] = memory['id']
-    
-    search(str(int(sys.argv[1])+1))
-    search(str(int(sys.argv[1])-1))
-    print(f"election: {memory['leader']}")
+    for offset in range(1, search_distance+1):
+        action(port, host, offset)
+        action(port, host, -offset)
 
 class Updates(Thread):
     """
@@ -150,23 +131,28 @@ class Updates(Thread):
     def run(self):
         global memory
         while True:
-            time.sleep(5)
+            time.sleep(1)
             local_neighbours = memory['neighbours'].copy()
             for neighbour_id in local_neighbours:
                 if not call(memory['neighbours'][neighbour_id]['port'], memory['neighbours'][neighbour_id]['host']):
-                    del memory['hashed_neighbours'][hashlib.md5(json.dumps(memory['neighbours'][neighbour_id]).encode ('utf-8')).hexdigest()]
+                    print("GONE")
+                    del memory['hashed_neighbours'][hashlib.md5(json.dumps(memory['neighbours'][neighbour_id]).encode('utf-8')).hexdigest()]
                     del memory['neighbours'][neighbour_id]
+            search(memory['port'])
 
 if __name__ == "__main__":
+    memory['id'] = str(uuid4())
+    memory['port'] = int(sys.argv[1])
+
+    print(memory['id'])
+
     Stop = Event()
     t = Updates(Stop)
     t.setDaemon(True)
     t.start()
-    memory['id'] = str(uuid4())
-    memory['port'] = sys.argv[1]
 
     try:
-        app.run(port=int(sys.argv[1]), debug=True)
+        app.run(port=memory['port'], debug=True, use_reloader=False)
     except KeyboardInterrupt:
         print("exiting")
         Stop.set()
