@@ -12,6 +12,7 @@ app = Flask(__name__)
 memory = {
     "id" : "",
     "neighbours": {},
+    "neighbour_state": {},
     "hashed_neighbours": {},
     "host": "127.0.0.1",
     "port": ""
@@ -31,11 +32,15 @@ def add_neighbour(neighbour_id, json_data):
         None
     """
     if neighbour_id not in memory['neighbours'] and neighbour_id != memory['id']:
-        if hashlib.md5(json.dumps({"host": json_data['host'], "port": json_data['port']}).encode('utf-8')).hexdigest() in memory['hashed_neighbours']:
-            del memory['neighbours'][memory['hashed_neighbours'][hashlib.md5(json.dumps({"host": json_data['host'], "port": json_data['port']}).encode('utf-8')).hexdigest()]]
-        
-        memory['neighbours'][neighbour_id] = {"host": json_data['host'], "port": json_data['port']}
-        memory['hashed_neighbours'][hashlib.md5(json.dumps(memory['neighbours'][neighbour_id]).encode('utf-8')).hexdigest()] = neighbour_id
+        if neighbour_id not in memory['neighbour_state'] or memory['neighbour_state'][neighbour_id] != 'stale':
+            if hashlib.md5(json.dumps({"host": json_data['host'], "port": json_data['port']}).encode('utf-8')).hexdigest() in memory['hashed_neighbours']:
+                del memory['neighbours'][memory['hashed_neighbours'][hashlib.md5(json.dumps({"host": json_data['host'], "port": json_data['port']}).encode('utf-8')).hexdigest()]]
+            
+            memory['neighbours'][neighbour_id] = {"host": json_data['host'], "port": json_data['port']}
+            memory['hashed_neighbours'][hashlib.md5(json.dumps(memory['neighbours'][neighbour_id]).encode('utf-8')).hexdigest()] = neighbour_id
+            memory['neighbour_state'][neighbour_id] = 'alive'
+
+
 @app.route('/', methods=['GET'])
 def index():
     """
@@ -135,9 +140,14 @@ class Updates(Thread):
             local_neighbours = memory['neighbours'].copy()
             for neighbour_id in local_neighbours:
                 if not call(memory['neighbours'][neighbour_id]['port'], memory['neighbours'][neighbour_id]['host']):
-                    print("GONE")
-                    del memory['hashed_neighbours'][hashlib.md5(json.dumps(memory['neighbours'][neighbour_id]).encode('utf-8')).hexdigest()]
-                    del memory['neighbours'][neighbour_id]
+                    if memory['neighbour_state'][neighbour_id] == 'stale':
+                        del memory['hashed_neighbours'][hashlib.md5(json.dumps(memory['neighbours'][neighbour_id]).encode('utf-8')).hexdigest()]
+                        del memory['neighbours'][neighbour_id]
+                        time.sleep(1)
+                        del memory['neighbour_state'][neighbour_id]
+                    else:
+                        memory['neighbour_state'][neighbour_id] = 'stale'
+                    
             search(memory['port'])
 
 if __name__ == "__main__":
