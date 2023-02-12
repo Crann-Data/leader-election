@@ -52,6 +52,15 @@ def index():
     """
     return render_template('index.html')
 
+@app.route('/transmit', methods=['PUT'])
+def toggle_transmit():
+    """
+    Toggle transmit status
+
+    return: 200
+    """
+    memory['transmit'] = not memory['transmit']
+    return Response("", status=200)
 
 @app.route('/data', methods=['GET', 'POST'])
 def data():
@@ -80,6 +89,7 @@ def data():
         add_neighbour(json_data['id'], json_data)
         if memory['transmit']:
             return jsonify(memory)
+        return ('', 204)
     else:
         return Response(update(), mimetype='text/event-stream')
 
@@ -88,6 +98,8 @@ def call(port, host="127.0.0.1"):
     try:
         resp = requests.post('http://' + host + ':' + port + '/data', json=memory)
         json_data = resp.json()
+        if resp.status_code == 204:
+            return False
     except Exception as e:
         print(f"call {host}:{port}: Error {e}")
         return False

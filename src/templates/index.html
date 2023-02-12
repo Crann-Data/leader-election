@@ -1,16 +1,34 @@
-<pre><p id="learn_output"></p></pre>
+<!DOCTYPE html>
+<html>
+<head>
+<title>Gossip Monitoring</title>
+<script src="static/js/script.js"></script>
 
-<script>
-    var target_output = document.getElementById("learn_output");
-    var learn_update = new EventSource("/data");
+</head>
+<body>
+    <table>
+        <tr>
+          <th>Key</th>
+          <th>Value</th>
+        </tr>
+        <tr>
+            <td>Host address</th>
+            <td id="host"></th>
+        </tr>
+        <tr>
+            <td>Host Port</th>
+            <td id="port"></th>
+        </tr>
+        <tr>
+            <td>Host ID</th>
+            <td id="id"></th>
+        </tr>
+    </table>
+    <pre>Number of live neighbours: <p id="number_live_neighbours"></p></pre>
+    <pre>Transmitting: <p id="transmitting"></p></pre>
+    <button onclick="toggleTransmit()">Toggle Transmit</button>
+</body>
+</html> 
 
-    learn_update.onmessage = function (e) {
-        if (e.data == "close") {
-            learn_update.close();
-        } else {
-            let json = JSON.stringify(JSON.parse(e.data), null, 2);
-            target_output.innerHTML = json
-            sessionStorage.setItem("data", json);
-        }
-    };
-</script>
+
+
