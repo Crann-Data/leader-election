@@ -15,18 +15,19 @@ memory = {
     "neighbour_state": {},
     "hashed_neighbours": {},
     "host": "127.0.0.1",
-    "port": ""
+    "port": "",
+    "transmit": True
     }
 
 
 def add_neighbour(neighbour_id, json_data):
     """
     Add a neighour to current list if not present. Add a hash host and port map to the 
-    neighbour ID.
+    neighbour ID. Add the neighbour state as alive to memory.
 
     parameters:
-        neigbour_id: key received from remote host
-        json_data: value received from remote host
+        neighbour_id: key received from remote host
+        json_data: neighbour memory received from remote hostx
 
     return:
         None
@@ -77,7 +78,8 @@ def data():
     if request.method == 'POST':
         json_data = request.json
         add_neighbour(json_data['id'], json_data)
-        return jsonify(memory)
+        if memory['transmit']:
+            return jsonify(memory)
     else:
         return Response(update(), mimetype='text/event-stream')
 
