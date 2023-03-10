@@ -7,13 +7,18 @@ function updateView(){
     var port = document.getElementById("port");
     var id = document.getElementById("id");
     var transmitting = document.getElementById("transmitting");
+    var neighbours = document.getElementById("neighbours");
+    var neighbour_state = document.getElementById("neighbour_state");
     
     data = JSON.parse(sessionStorage.getItem("data"));
-    number_live_neighbours.innerHTML  = Object.keys(data.neighbours).length
-    host.innerHTML = data.host
-    port.innerHTML = data.port
-    id.innerHTML = data.id
-    transmitting.innerHTML = data.transmit
+    console.log(data);
+    number_live_neighbours.innerHTML  = Object.keys(data.neighbours).length;
+    host.innerHTML = data.host;
+    port.innerHTML = data.port;
+    id.innerHTML = data.id;
+    transmitting.innerHTML = data.transmit;
+    neighbours.innerHTML = Object.keys(data.neighbours);
+    neighbour_state.innerHTML = Object.keys(data.neighbour_state);
 
 }
 

@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, render_template, Response
+
 from uuid import uuid4
 import time
 import sys
@@ -7,7 +8,15 @@ from threading import Thread, Event
 import json
 import hashlib
 
-app = Flask(__name__)
+from flask_openapi3 import Info, Tag
+from flask_openapi3 import OpenAPI
+
+info = Info(title="book API", version="1.0.0")
+app = OpenAPI(__name__, info=info)
+
+context = {
+
+}
 
 memory = {
     "id" : "",
@@ -21,19 +30,17 @@ memory = {
 
 
 def add_neighbour(neighbour_id, json_data):
-    """
-    Add a neighour to current list if not present. Add a hash host and port map to the 
+    """Add a neighour to current list if not present. Add a hash host and port map to the 
     neighbour ID. Add the neighbour state as alive to memory.
-
+    ---
     parameters:
-        neighbour_id: key received from remote host
-        json_data: neighbour memory received from remote hostx
-
+        - neighbour_id: key received from remote host
+        - json_data: neighbour memory received from remote hostx
     return:
         None
     """
     if neighbour_id not in memory['neighbours'] and neighbour_id != memory['id']:
-        if neighbour_id not in memory['neighbour_state'] or memory['neighbour_state'][neighbour_id] != 'stale':
+        if neighbour_id not in memory['neighbour_state'] or memory['neighbour_state'][neighbour_id] != 'stale' or memory['neighbour_state'][neighbour_id] != 'dead':
             if hashlib.md5(json.dumps({"host": json_data['host'], "port": json_data['port']}).encode('utf-8')).hexdigest() in memory['hashed_neighbours']:
                 del memory['neighbours'][memory['hashed_neighbours'][hashlib.md5(json.dumps({"host": json_data['host'], "port": json_data['port']}).encode('utf-8')).hexdigest()]]
             
@@ -46,9 +53,10 @@ def add_neighbour(neighbour_id, json_data):
 def index():
     """
     Serve index.html
-
-    return:
-        rendered index.html
+    ---
+    responses:
+        200: 
+            description: index.html
     """
     return render_template('index.html')
 
@@ -56,25 +64,24 @@ def index():
 def toggle_transmit():
     """
     Toggle transmit status
+    ---
 
-    return: 200
+    responses: 
+        200:
+            description: Boolean state of transmission status
     """
     memory['transmit'] = not memory['transmit']
-    return Response("", status=200)
+    return Response(memory['transmit'], status=200)
 
-@app.route('/data', methods=['GET', 'POST'])
-def data():
+@app.route('/data', methods=['GET'])
+def get_data():
     """
-    Handle data input and requests. Data is passed by calling POST
-    with a json body of the total remote host memory.
+    Get host memory
 
-    If the current leader is unknown, elect self and publish.
-
-    args:
-        request.json
-
-    return:
-        On GET return an event-stream of the local host memory
+    ---
+    responses:
+        200:
+            description: On GET return an event-stream of the local host memory
     """
     global memory
     def update():
@@ -83,23 +90,39 @@ def data():
                 # Perform update
                 time.sleep(0.1)
                 yield f'data: {json.dumps(memory)}\n\n'
+    return Response(update(), mimetype='text/event-stream')
 
-    if request.method == 'POST':
-        json_data = request.json
-        add_neighbour(json_data['id'], json_data)
-        if memory['transmit']:
-            return jsonify(memory)
-        return ('', 204)
-    else:
-        return Response(update(), mimetype='text/event-stream')
+@app.route('/data', methods=['POST'])
+def post_data():
+    """
+    Send remote memory to host
+
+    Handle data input and requests with a json body of the total remote host memory.
+    ---
+    parameters:
+        - name: request.json
+          in: json
+          type: string
+          required: true
+    responses:
+        200:
+            description: On GET return an event-stream of the local host memory
+    """
+    global memory
+
+    json_data = request.json
+    add_neighbour(json_data['id'], json_data)
+    if memory['transmit']:
+        return jsonify(memory)
+    return Response("", 204)
 
 def call(port, host="127.0.0.1"):
     port = str(port)
     try:
         resp = requests.post('http://' + host + ':' + port + '/data', json=memory)
-        json_data = resp.json()
         if resp.status_code == 204:
             return False
+        json_data = resp.json()
     except Exception as e:
         print(f"call {host}:{port}: Error {e}")
         return False
@@ -155,10 +178,13 @@ class Updates(Thread):
             for neighbour_id in local_neighbours:
                 if not call(memory['neighbours'][neighbour_id]['port'], memory['neighbours'][neighbour_id]['host']):
                     if memory['neighbour_state'][neighbour_id] == 'stale':
+                        time.sleep(1)
+                        memory['neighbour_state'][neighbour_id] = 'dead'
                         del memory['hashed_neighbours'][hashlib.md5(json.dumps(memory['neighbours'][neighbour_id]).encode('utf-8')).hexdigest()]
                         del memory['neighbours'][neighbour_id]
-                        time.sleep(1)
-                        del memory['neighbour_state'][neighbour_id]
+                    elif memory['neighbour_state'][neighbour_id] == 'dead':
+                        print("He's dead jim")
+                        # del memory['neighbour_state'][neighbour_id]
                     else:
                         memory['neighbour_state'][neighbour_id] = 'stale'
                     
